@@ -1,2 +1,1 @@
-# F1RAG
-A repository for generating Formula 1 race summaries using RAG
+This repository is empty. Any task executed on it should be considered a new capability and needs to be created.
