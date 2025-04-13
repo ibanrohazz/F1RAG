@@ -1,152 +1,232 @@
-import sys
+"""
+Data processing script for Formula 1 RAG system.
+Processes raw CSV files from the Formula 1 dataset (1950-2020) from Kaggle.
+"""
 import os
+import json
+import argparse
+import pandas as pd
+import logging
 
-# Print environment information for debugging
-print(f"Python executable: {sys.executable}")
-print(f"Python version: {sys.version}")
-print(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("data_processing.log")
+    ]
+)
+logger = logging.getLogger(__name__)
 
-try:
-    import pandas as pd
-    import numpy as np
-    import json
-    print(f"Successfully imported pandas version: {pd.__version__}")
-    print(f"Successfully imported numpy version: {np.__version__}")
-except ImportError as e:
-    print(f"Error importing required libraries: {e}")
-    print("\nTroubleshooting steps:")
-    print("1. Your virtual environment seems to have issues. Try creating a new one:")
-    print("   - Exit current environment: deactivate")
-    print("   - Remove existing environment: rm -rf env (Linux/Mac) or rmdir /s /q env (Windows)")
-    print("   - Create new environment: python -m venv new_env")
-    print("   - Activate new environment: .\\new_env\\Scripts\\activate (Windows) or source new_env/bin/activate (Linux/Mac)")
-    print("   - Install dependencies: pip install -r requirements.txt")
-    print("\n2. Or install packages directly to your system Python:")
-    print("   - Deactivate virtual environment: deactivate")
-    print("   - Install globally: pip install pandas numpy")
-    print("\n3. If still having issues, try using conda instead of venv:")
-    print("   - Install miniconda (if not already installed)")
-    print("   - Create environment: conda create -n f1rag python=3.9")
-    print("   - Activate: conda activate f1rag")
-    print("   - Install packages: pip install -r requirements.txt")
-    sys.exit(1)
-
-def load_race_data(file_path):
+def load_csv_data(archive_dir):
     """
-    Load race data from a CSV file.
+    Load CSV data from the archive directory
     
     Args:
-        file_path (str): Path to the CSV file containing race data.
+        archive_dir (str): Directory containing the CSV files
         
     Returns:
-        pd.DataFrame: DataFrame containing the race data.
+        dict: Dictionary of DataFrames with file names as keys
     """
-    return pd.read_csv(file_path)
+    logger.info(f"Loading CSV data from {archive_dir}")
+    
+    csv_files = [f for f in os.listdir(archive_dir) if f.endswith('.csv')]
+    
+    if not csv_files:
+        logger.error(f"No CSV files found in {archive_dir}")
+        return {}
+    
+    data = {}
+    for file in csv_files:
+        try:
+            file_path = os.path.join(archive_dir, file)
+            df = pd.read_csv(file_path)
+            data[file.replace('.csv', '')] = df
+            logger.info(f"Loaded {file} with {len(df)} rows")
+        except Exception as e:
+            logger.error(f"Error loading {file}: {e}")
+    
+    return data
 
-def preprocess_race_data(df):
+def extract_race_information(data_dict):
     """
-    Preprocess race data by handling missing values and converting data types.
+    Extract race information from the data
     
     Args:
-        df (pd.DataFrame): DataFrame containing the race data.
+        data_dict (dict): Dictionary of DataFrames
         
     Returns:
-        pd.DataFrame: Preprocessed race data.
+        list: List of dictionaries with race information
     """
-    # Handle missing values
-    df.fillna(method='ffill', inplace=True)
+    logger.info("Extracting race information")
     
-    # Convert data types
-    df['lap_time'] = pd.to_timedelta(df['lap_time'])
+    races_info = []
     
-    return df
+    # Check if we have the necessary files
+    required_files = ['races', 'circuits', 'results', 'drivers', 'lap_times']
+    missing_files = [f for f in required_files if f not in data_dict]
+    
+    if missing_files:
+        logger.warning(f"Missing required data files: {missing_files}")
+        
+    # If we have races and circuits data, we can extract basic race information
+    if 'races' in data_dict and 'circuits' in data_dict:
+        races_df = data_dict['races']
+        circuits_df = data_dict['circuits']
+        
+        # Join races with circuits
+        try:
+            races_with_circuits = pd.merge(
+                races_df,
+                circuits_df,
+                left_on='circuitId',
+                right_on='circuitId',
+                how='left'
+            )
+            
+            # Process each race
+            for _, race in races_with_circuits.iterrows():
+                race_info = {
+                    'race_id': int(race['raceId']),
+                    'race_name': race['name_x'],
+                    'circuit_name': race['name_y'],
+                    'circuit_location': f"{race['location']}, {race['country']}",
+                    'date': race['date'],
+                    'year': int(race['year']),
+                    'round': int(race['round']),
+                    'lap_times': {}
+                }
+                
+                # Add lap times if available
+                if 'lap_times' in data_dict:
+                    lap_times_df = data_dict['lap_times']
+                    race_laps = lap_times_df[lap_times_df['raceId'] == race_info['race_id']]
+                    
+                    if not race_laps.empty:
+                        # Add driver information if available
+                        if 'drivers' in data_dict:
+                            drivers_df = data_dict['drivers']
+                            for driver_id in race_laps['driverId'].unique():
+                                driver_info = drivers_df[drivers_df['driverId'] == driver_id]
+                                if not driver_info.empty:
+                                    driver_name = f"{driver_info.iloc[0]['forename']} {driver_info.iloc[0]['surname']}"
+                                    driver_laps = race_laps[race_laps['driverId'] == driver_id]
+                                    
+                                    # Convert lap times to strings with format "minute:second.millisecond"
+                                    lap_times = []
+                                    for _, lap in driver_laps.iterrows():
+                                        millisec = lap['milliseconds']
+                                        minutes = millisec // 60000
+                                        seconds = (millisec % 60000) / 1000
+                                        lap_times.append(f"{minutes}:{seconds:.3f}")
+                                    
+                                    race_info['lap_times'][driver_name] = lap_times
+                
+                races_info.append(race_info)
+            
+            logger.info(f"Extracted information for {len(races_info)} races")
+        
+        except Exception as e:
+            logger.error(f"Error extracting race information: {e}")
+    
+    return races_info
 
-def extract_race_information(df):
+def prepare_data_for_rag(race_info, output_file):
     """
-    Extract relevant race information such as lap times, pit stops, overtakes, and incidents.
+    Prepare race information for the RAG model and save it to a file
     
     Args:
-        df (pd.DataFrame): DataFrame containing the race data.
+        race_info (list): List of race information dictionaries
+        output_file (str): Path to save the processed data
         
     Returns:
-        dict: Dictionary containing extracted race information.
+        list: List of processed examples for the RAG model
     """
-    race_info = {
-        'lap_times': df.groupby('driver')['lap_time'].apply(list).to_dict(),
-        'pit_stops': df[df['event'] == 'pit_stop'].groupby('driver')['lap'].apply(list).to_dict(),
-        'overtakes': df[df['event'] == 'overtake'].groupby('driver')['lap'].apply(list).to_dict(),
-        'incidents': df[df['event'] == 'incident'].groupby('driver')['lap'].apply(list).to_dict()
-    }
+    logger.info(f"Preparing {len(race_info)} races for the RAG model")
     
-    return race_info
-
-def prepare_data_for_rag(race_info, output_file='data/processed/race_data.json'):
-    """
-    Prepare race information for the RAG model and save it to a file.
+    # Create examples for the RAG model
+    examples = []
     
-    Args:
-        race_info (dict): Dictionary containing race information.
-        output_file (str): Path to save the processed data.
-        
-    Returns:
-        list: List of race data examples for the RAG model.
-    """
-    # Convert lap times to string representations for the model
-    for driver, lap_times in race_info['lap_times'].items():
-        race_info['lap_times'][driver] = [str(lt) for lt in lap_times]
+    for race in race_info:
+        # Skip races without lap times
+        if not race['lap_times']:
+            continue
+            
+        # Create a detailed example for each driver
+        for driver, lap_times in race['lap_times'].items():
+            if not lap_times:
+                continue
+                
+            example = {
+                "race_id": race['race_id'],
+                "race_name": race['race_name'],
+                "circuit_name": race['circuit_name'],
+                "location": race['circuit_location'],
+                "date": race['date'],
+                "year": race['year'],
+                "driver": driver,
+                "lap_times": lap_times[:10]  # Limit to first 10 laps
+            }
+            
+            examples.append(example)
     
     # Ensure the output directory exists
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     
     # Save the processed data to a JSON file
     with open(output_file, 'w') as f:
-        json.dump(race_info, f)
+        json.dump(examples, f, indent=2)
     
-    # Create examples for the RAG model
-    examples = []
-    for driver in race_info['lap_times'].keys():
-        example = f"Driver: {driver}\n"
-        example += f"Lap times: {race_info['lap_times'].get(driver, [])}\n"
-        example += f"Pit stops: {race_info['pit_stops'].get(driver, [])}\n"
-        example += f"Overtakes: {race_info['overtakes'].get(driver, [])}\n"
-        example += f"Incidents: {race_info['incidents'].get(driver, [])}\n"
-        examples.append(example)
+    logger.info(f"Saved {len(examples)} examples to {output_file}")
     
-    return examples
+    # Also create text examples for the model
+    text_examples = []
+    for example in examples:
+        text = f"Race: {example['race_name']} ({example['year']})\n"
+        text += f"Circuit: {example['circuit_name']} - {example['location']}\n"
+        text += f"Driver: {example['driver']}\n"
+        text += f"Date: {example['date']}\n"
+        text += "Lap Times: " + ", ".join(example['lap_times']) + "\n"
+        text_examples.append(text)
+    
+    # Save text examples
+    text_file = output_file.replace('.json', '_text.json')
+    with open(text_file, 'w') as f:
+        json.dump(text_examples, f, indent=2)
+        
+    logger.info(f"Saved {len(text_examples)} text examples to {text_file}")
+    
+    return text_examples
 
-if __name__ == "__main__":
-    # Define file paths
-    input_file = "data/raw/race_data.csv"
-    output_file = "data/processed/race_data.json"
-    examples_file = "data/processed/race_examples.json"
+def main():
+    """Main function for data processing"""
+    parser = argparse.ArgumentParser(description="Process Formula 1 data for RAG model")
+    parser.add_argument("--input", type=str, default="data/raw/archive", 
+                        help="Directory containing CSV files")
+    parser.add_argument("--output", type=str, default="data/processed/race_data.json",
+                        help="Output file for processed data")
     
-    print("Starting data processing...")
+    args = parser.parse_args()
     
-    # Check if input file exists
-    if not os.path.exists(input_file):
-        print(f"Error: Input file '{input_file}' not found.")
-        print("Please make sure to place the race data CSV file in the data/raw directory.")
-        exit(1)
+    # Load CSV data
+    data_dict = load_csv_data(args.input)
     
-    # Load the race data
-    print(f"Loading race data from {input_file}...")
-    df = load_race_data(input_file)
-    
-    # Preprocess the data
-    print("Preprocessing race data...")
-    df = preprocess_race_data(df)
+    if not data_dict:
+        logger.error("No data loaded, exiting.")
+        return
     
     # Extract race information
-    print("Extracting race information...")
-    race_info = extract_race_information(df)
+    race_info = extract_race_information(data_dict)
+    
+    if not race_info:
+        logger.error("No race information extracted, exiting.")
+        return
     
     # Prepare data for the RAG model
-    print(f"Preparing data for the RAG model and saving to {output_file}...")
-    examples = prepare_data_for_rag(race_info, output_file)
+    examples = prepare_data_for_rag(race_info, args.output)
     
-    # Save the examples
-    os.makedirs(os.path.dirname(examples_file), exist_ok=True)
-    with open(examples_file, 'w') as f:
-        json.dump(examples, f)
-    
-    print(f"Data processing complete. Examples saved to {examples_file}.")
+    logger.info("Data processing complete")
+
+if __name__ == "__main__":
+    main()

@@ -1,5 +1,7 @@
 @echo off
-echo Creating new virtual environment for F1RAG...
+echo ==============================================
+echo Formula 1 RAG System - Environment Setup
+echo ==============================================
 
 :: Remove old environment if it exists
 if exist env (
@@ -7,33 +9,74 @@ if exist env (
     rmdir /s /q env
 )
 
-:: Create new environment with Python 3.9 if available
-py -3.9 -m venv new_env 2>nul
+:: Create new environment
+echo Creating new virtual environment...
+python -m venv env
 if %errorlevel% neq 0 (
-    echo Python 3.9 not available, trying with default Python...
-    python -m venv new_env
+    echo Failed to create virtual environment.
+    echo Please ensure Python is installed correctly.
+    pause
+    exit /b 1
 )
 
 :: Activate environment
 echo Activating environment...
-call new_env\Scripts\activate
+call env\Scripts\activate
+if %errorlevel% neq 0 (
+    echo Failed to activate virtual environment.
+    pause
+    exit /b 1
+)
 
 :: Update pip and install packages
 echo Upgrading pip...
 python -m pip install --upgrade pip
 
 echo Installing dependencies...
-pip install pandas numpy transformers torch matplotlib seaborn scikit-learn
+echo This may take a few minutes...
+
+:: Install packages one by one to ensure success
+pip install torch==2.0.0 --index-url https://download.pytorch.org/whl/cpu
+if %errorlevel% neq 0 (
+    echo Warning: Failed to install specific torch version. Trying without version constraint...
+    pip install torch --index-url https://download.pytorch.org/whl/cpu
+)
+
+echo Installing transformers package...
+pip install transformers==4.30.0
+if %errorlevel% neq 0 (
+    echo Failed with specific version, trying latest transformers...
+    pip install transformers
+)
+
+:: Verify transformers was installed
+python -c "import transformers; print('Transformers successfully installed:', transformers.__version__)"
+if %errorlevel% neq 0 (
+    echo ERROR: Failed to install transformers. Please try manual installation:
+    echo pip install transformers
+    pause
+    exit /b 1
+)
+
+:: Install other required packages
+echo Installing additional dependencies...
+pip install datasets scikit-learn pandas numpy matplotlib seaborn tqdm
+if %errorlevel% neq 0 (
+    echo Warning: Some packages may have failed to install.
+)
 
 :: Create directory structure for data
 echo Creating directory structure...
 mkdir data\raw 2>nul
 mkdir data\processed 2>nul
+mkdir data\output 2>nul
+mkdir data\passage_data 2>nul
+mkdir models 2>nul
 
 echo.
 echo Please select a data source:
 echo 1. Generate sample F1 data
-echo 2. Process real F1 archive data from data\raw\archive folder
+echo 2. Process Formula 1 World Championship data from Kaggle (1950-2024)
 echo 3. Skip data preparation for now
 set /p data_choice=Enter your choice (1-3): 
 
@@ -45,21 +88,32 @@ if "%data_choice%"=="1" (
     
     if not exist data\raw\archive (
         echo Error: data\raw\archive folder not found.
-        echo Please ensure your F1 data archive is in the folder data\raw\archive.
-        echo Archive structure should contain CSV files for races, lap times, drivers, etc.
+        echo Please download the Formula 1 dataset from Kaggle:
+        echo https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020
+        echo Extract the archive and place the CSV files in data\raw\archive folder.
+        mkdir data\raw\archive 2>nul
     ) else (
-        python scripts\process_f1_archive.py --archive data\raw\archive --output data\raw\race_data.csv
+        python src\data_processing.py --input data\raw\archive --output data\processed\race_data.json
     )
 )
 
+:: Create requirements file
+pip freeze > requirements.txt
+
 echo.
 echo Environment setup complete!
-echo Run 'new_env\Scripts\activate' to activate the environment
 echo.
-echo Data sources for Formula 1 race data:
-echo 1. Ergast API: http://ergast.com/mrd/ (Free F1 data API)
-echo 2. Formula 1 Official API: https://www.formula1.com/en/f1-live.html (Requires subscription)
-echo 3. F1 CSV datasets on Kaggle: https://www.kaggle.com/datasets?search=formula+1
-echo 4. FastF1 Python package: pip install fastf1 (Python package for accessing F1 data)
+echo How to use:
+echo 1. Always activate the environment first:
+echo    env\Scripts\activate
 echo.
-echo To use the processed data, run: python src/data_processing.py
+echo 2. Run the RAG model:
+echo    python src/data_processing.py    (to process data)
+echo    python src/rag_model.py          (to train the model)
+echo    python src/rag_model.py --generate (to generate race summaries)
+echo.
+echo The Formula 1 dataset is from:
+echo https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020
+echo.
+
+pause

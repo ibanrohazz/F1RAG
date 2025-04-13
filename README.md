@@ -1,40 +1,71 @@
-# F1RAG
+# F1RAG - Formula 1 Retrieval Augmented Generation System
 
-## Project Description
+F1RAG is a retrieval-augmented generation system focused on Formula 1 racing data. The system leverages historical Formula 1 data to provide insights, answer questions, and generate content related to Formula 1 racing.
 
-F1RAG is a project that uses Retrieval-Augmented Generation (RAG) to generate summaries of Formula 1 races. The project collects race data, including lap times, pit stops, overtakes, and incidents, and trains a RAG model to generate coherent and informative race summaries based on the collected data. The quality of the generated summaries is evaluated by comparing them with official race reports. The project also includes visualization tools and an interface for users to explore different races and their summaries.
+## Data Source
 
-## Environment Setup
+The system uses Formula 1 World Championship data from 1950-2020, sourced from:
+- **Dataset**: [Formula 1 World Championship (1950-2020)](https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020)
+- **Platform**: Kaggle
+- **Credit**: Rohan Rao (Dataset Creator)
 
-To set up the environment for this project, follow these steps:
+## Setup and Requirements
+
+### Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/githubnext/workspace-blank.git
-   cd workspace-blank
+   git clone https://github.com/yourusername/F1RAG.git
+   cd F1RAG
    ```
 
-2. Create and activate a virtual environment:
+2. Quick setup (recommended):
    ```bash
+   # On Windows
+   setup_env.bat
+   
+   # On any platform with Python
+   python install_deps.py
+   ```
+
+3. Manual setup:
+   ```bash
+   # Create and activate a virtual environment
    python -m venv env
+   
+   # On Windows
+   env\Scripts\activate
+   
+   # On macOS/Linux
    source env/bin/activate
+   
+   # Install required packages
+   pip install torch transformers datasets scikit-learn pandas matplotlib seaborn
    ```
 
-3. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+4. Download the dataset:
+   - Download the [Formula 1 dataset from Kaggle](https://www.kaggle.com/datasets/rohanrao/formula-1-world-championship-1950-2020)
+   - Extract the CSV files into the `data/raw/archive` directory
 
 ## Running the Project
 
-To run the project, follow these steps:
+Always activate the virtual environment first:
+```bash
+# On Windows
+env\Scripts\activate
 
-1. Preprocess the race data:
+# On macOS/Linux
+source env/bin/activate
+```
+
+Then follow these steps:
+
+1. Process the race data:
    ```bash
    python src/data_processing.py
    ```
 
-2. Train the RAG model:
+2. Train the model:
    ```bash
    python src/rag_model.py
    ```
@@ -44,10 +75,34 @@ To run the project, follow these steps:
    python src/rag_model.py --generate
    ```
 
-4. Visualize the race summaries:
+4. Visualize the race summaries (optional):
    ```bash
    python src/visualization.py
    ```
 
-5. Explore the race summaries using the provided interface:
-   Open the generated HTML file in your web browser.
+## Troubleshooting
+
+If you encounter a `ModuleNotFoundError`, ensure you've:
+1. Activated the virtual environment
+2. Installed all dependencies 
+3. Used the correct Python interpreter
+
+To verify your environment, run:
+```bash
+python -c "import transformers; print('Transformers version:', transformers.__version__)"
+```
+
+If that fails, try reinstalling the transformers package:
+```bash
+pip install --upgrade transformers
+```
+
+## License
+
+This project uses data under the terms provided by Kaggle and the dataset creator. 
+The F1 data is provided for educational and research purposes.
+
+## Acknowledgments
+
+- Thanks to Rohan Rao for compiling and sharing the comprehensive Formula 1 dataset on Kaggle.
+- Formula 1 (F1) for the exciting sport that generated this data.
