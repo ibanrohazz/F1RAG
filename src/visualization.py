@@ -1,52 +1,50 @@
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-
 def visualize_race_summaries(race_summaries):
     """
     Visualize race summaries using bar plots and line plots.
-    
     Args:
         race_summaries (list): List of race summaries.
     """
-    # Convert race summaries to DataFrame
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
     df = pd.DataFrame(race_summaries)
-    
-    # Plot lap times
-    plt.figure(figsize=(10, 6))
-    sns.lineplot(data=df, x='lap', y='lap_time', hue='driver')
-    plt.title('Lap Times')
-    plt.xlabel('Lap')
-    plt.ylabel('Lap Time')
-    plt.legend(title='Driver')
-    plt.show()
-    
-    # Plot pit stops
-    plt.figure(figsize=(10, 6))
-    sns.countplot(data=df[df['event'] == 'pit_stop'], x='lap', hue='driver')
-    plt.title('Pit Stops')
-    plt.xlabel('Lap')
-    plt.ylabel('Count')
-    plt.legend(title='Driver')
-    plt.show()
-    
-    # Plot overtakes
-    plt.figure(figsize=(10, 6))
-    sns.countplot(data=df[df['event'] == 'overtake'], x='lap', hue='driver')
-    plt.title('Overtakes')
-    plt.xlabel('Lap')
-    plt.ylabel('Count')
-    plt.legend(title='Driver')
-    plt.show()
-    
-    # Plot incidents
-    plt.figure(figsize=(10, 6))
-    sns.countplot(data=df[df['event'] == 'incident'], x='lap', hue='driver')
-    plt.title('Incidents')
-    plt.xlabel('Lap')
-    plt.ylabel('Count')
-    plt.legend(title='Driver')
-    plt.show()
+    try:
+        # Plot lap times
+        plt.figure(figsize=(10, 6))
+        sns.lineplot(data=df, x='lap', y='lap_time', hue='driver')
+        plt.title('Lap Times')
+        plt.xlabel('Lap')
+        plt.ylabel('Lap Time')
+        plt.legend(title='Driver')
+        plt.show()
+        # Plot pit stops
+        plt.figure(figsize=(10, 6))
+        sns.countplot(data=df[df['event'] == 'pit_stop'], x='lap', hue='driver')
+        plt.title('Pit Stops')
+        plt.xlabel('Lap')
+        plt.ylabel('Count')
+        plt.legend(title='Driver')
+        plt.show()
+        # Plot overtakes
+        plt.figure(figsize=(10, 6))
+        sns.countplot(data=df[df['event'] == 'overtake'], x='lap', hue='driver')
+        plt.title('Overtakes')
+        plt.xlabel('Lap')
+        plt.ylabel('Count')
+        plt.legend(title='Driver')
+        plt.show()
+        # Plot incidents
+        plt.figure(figsize=(10, 6))
+        sns.countplot(data=df[df['event'] == 'incident'], x='lap', hue='driver')
+        plt.title('Incidents')
+        plt.xlabel('Lap')
+        plt.ylabel('Count')
+        plt.legend(title='Driver')
+        plt.show()
+    except KeyboardInterrupt:
+        print("Visualization interrupted by user. Exiting gracefully.")
+        plt.close('all')
+        return
 
 def create_user_interface(race_summaries):
     """

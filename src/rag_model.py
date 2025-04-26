@@ -254,28 +254,25 @@ def generate_race_summaries(model, tokenizer, race_data, batch_size=4, max_lengt
     logger.info(f"Generating summaries for {len(string_data)} examples")
     
     summaries = []
-    
-    for i in range(0, len(string_data), batch_size):
-        batch = string_data[i:i+batch_size]
-        
-        inputs = tokenizer(batch, padding=True, truncation=True, 
-                           return_tensors="pt", max_length=512).to(device)
-        
-        with torch.no_grad():
-            output_sequences = model.generate(
-                input_ids=inputs["input_ids"],
-                attention_mask=inputs["attention_mask"],
-                max_length=max_length,
-                num_return_sequences=1,
-                no_repeat_ngram_size=3,
-                early_stopping=True
-            )
-        
-        decoded_summaries = tokenizer.batch_decode(output_sequences, skip_special_tokens=True)
-        summaries.extend(decoded_summaries)
-        
-        logger.info(f"Generated {len(decoded_summaries)} summaries, total: {len(summaries)}/{len(string_data)}")
-    
+    try:
+        for i in range(0, len(string_data), batch_size):
+            batch = string_data[i:i+batch_size]
+            inputs = tokenizer(batch, padding=True, truncation=True, 
+                               return_tensors="pt", max_length=512).to(device)
+            with torch.no_grad():
+                output_sequences = model.generate(
+                    input_ids=inputs["input_ids"],
+                    attention_mask=inputs["attention_mask"],
+                    max_length=max_length,
+                    num_return_sequences=1,
+                    no_repeat_ngram_size=3,
+                    early_stopping=True
+                )
+            decoded_summaries = tokenizer.batch_decode(output_sequences, skip_special_tokens=True)
+            summaries.extend(decoded_summaries)
+            logger.info(f"Generated {len(decoded_summaries)} summaries, total: {len(summaries)}/{len(string_data)}")
+    except KeyboardInterrupt:
+        logger.warning("Generation interrupted by user. Returning summaries generated so far.")
     return summaries
 
 def load_data(data_file='data/processed/race_data.json'):
@@ -401,9 +398,19 @@ def main():
         try:
             # Load the trained model for generation
             logger.info(f"Loading model from {args.model_dir}")
-            tokenizer = AutoTokenizer.from_pretrained(args.model_dir)
-            model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
-            
+            try:
+                # Try loading from local directory
+                if os.path.isdir(args.model_dir) and os.path.isfile(os.path.join(args.model_dir, "config.json")):
+                    tokenizer = AutoTokenizer.from_pretrained(args.model_dir)
+                    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
+                else:
+                    raise FileNotFoundError(f"Model directory {args.model_dir} is missing or incomplete.")
+            except Exception as e:
+                logger.warning(f"Could not load local model from {args.model_dir}: {e}")
+                logger.warning("Falling back to public pre-trained model 'facebook/bart-large'.")
+                tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large")
+                model = AutoModelForSeq2SeqLM.from_pretrained("facebook/bart-large")
+
             # Generate summaries
             logger.info("Generating race summaries")
             summaries = generate_race_summaries(
