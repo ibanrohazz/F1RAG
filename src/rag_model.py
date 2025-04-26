@@ -128,129 +128,91 @@ def train_rag_model(data, model_name='facebook/rag-sequence-nq', epochs=3, batch
         raise ValueError("No valid string data for training")
         
     logger.info(f"Prepared {len(string_data)} string examples for training")
-    
+
     # Try to use seq2seq model for training
     try:
         # Initialize tokenizer and model
         logger.info("Loading tokenizer and model...")
-        
         # Simple approach using seq2seq model
         tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large")
         model = AutoModelForSeq2SeqLM.from_pretrained("facebook/bart-large")
-        
-        # Prepare optimizer
         optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-        
-        # Split data into training and validation sets
         logger.info("Splitting data into training and validation sets")
         train_data, val_data = train_test_split(string_data, test_size=0.1, random_state=42)
-        
-        # Create datasets
         train_dataset = F1RaceDataset(train_data)
         val_dataset = F1RaceDataset(val_data)
-        
-        # Create dataloaders with proper batch handling
         train_dataloader = DataLoader(
             train_dataset, 
             batch_size=batch_size, 
             shuffle=True
         )
-        
         val_dataloader = DataLoader(
             val_dataset, 
             batch_size=batch_size
         )
-        
-        # Training loop
         logger.info(f"Starting training for {epochs} epochs")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"Using device: {device}")
-        
         model.to(device)
-        
         best_val_loss = float('inf')
-        
-        for epoch in range(epochs):
-            model.train()
-            total_train_loss = 0
-            
-            logger.info(f"Starting epoch {epoch+1}/{epochs}")
-            for batch_idx, batch in enumerate(train_dataloader):
-                # Ensure batch is a list of strings
-                if not all(isinstance(item, str) for item in batch):
-                    logger.warning(f"Batch contains non-string items. Converting to strings.")
-                    batch = [str(item) for item in batch]
-                
-                # Tokenize the batch
-                inputs = tokenizer(batch, padding=True, truncation=True, 
-                                  max_length=512, return_tensors="pt")
-                
-                # Move inputs to device
-                inputs = {k: v.to(device) for k, v in inputs.items()}
-                
-                # Set labels for generation task (same as input_ids for denoising)
-                labels = inputs["input_ids"].clone()
-                
-                # Forward pass
-                outputs = model(input_ids=inputs['input_ids'], 
-                                attention_mask=inputs.get('attention_mask'), 
-                                labels=labels)
-                loss = outputs.loss
-                
-                # Backward pass and optimization
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                
-                total_train_loss += loss.item()
-                
-                if (batch_idx + 1) % 5 == 0:
-                    logger.info(f"Epoch {epoch+1}/{epochs}, Batch {batch_idx+1}/{len(train_dataloader)}, Loss: {loss.item():.4f}")
-            
-            avg_train_loss = total_train_loss / len(train_dataloader)
-            
-            # Validation
-            model.eval()
-            total_val_loss = 0
-            
-            with torch.no_grad():
-                for batch in val_dataloader:
-                    # Ensure batch is a list of strings
+        try:
+            for epoch in range(epochs):
+                model.train()
+                total_train_loss = 0
+                logger.info(f"Starting epoch {epoch+1}/{epochs}")
+                for batch_idx, batch in enumerate(train_dataloader):
                     if not all(isinstance(item, str) for item in batch):
+                        logger.warning(f"Batch contains non-string items. Converting to strings.")
                         batch = [str(item) for item in batch]
-                    
-                    # Tokenize the batch
                     inputs = tokenizer(batch, padding=True, truncation=True, 
                                       max_length=512, return_tensors="pt")
-                    
                     inputs = {k: v.to(device) for k, v in inputs.items()}
                     labels = inputs["input_ids"].clone()
                     outputs = model(input_ids=inputs['input_ids'], 
-                                   attention_mask=inputs.get('attention_mask'), 
-                                   labels=labels)
-                    total_val_loss += outputs.loss.item()
-            
-            avg_val_loss = total_val_loss / len(val_dataloader)
-            
-            logger.info(f"Epoch {epoch+1}/{epochs}, Training Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}")
-            
-            # Save the model if it's the best so far
-            if avg_val_loss < best_val_loss:
-                best_val_loss = avg_val_loss
-                logger.info(f"New best validation loss: {best_val_loss:.4f}, saving model")
-                model_path = os.path.join(output_dir, f"model_epoch_{epoch+1}")
-                model.save_pretrained(model_path)
-                tokenizer.save_pretrained(model_path)
-        
-        # Save the final model
+                                    attention_mask=inputs.get('attention_mask'), 
+                                    labels=labels)
+                    loss = outputs.loss
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                    total_train_loss += loss.item()
+                    if (batch_idx + 1) % 5 == 0:
+                        logger.info(f"Epoch {epoch+1}/{epochs}, Batch {batch_idx+1}/{len(train_dataloader)}, Loss: {loss.item():.4f}")
+                avg_train_loss = total_train_loss / len(train_dataloader)
+                model.eval()
+                total_val_loss = 0
+                with torch.no_grad():
+                    for batch in val_dataloader:
+                        if not all(isinstance(item, str) for item in batch):
+                            batch = [str(item) for item in batch]
+                        inputs = tokenizer(batch, padding=True, truncation=True, 
+                                          max_length=512, return_tensors="pt")
+                        inputs = {k: v.to(device) for k, v in inputs.items()}
+                        labels = inputs["input_ids"].clone()
+                        outputs = model(input_ids=inputs['input_ids'], 
+                                       attention_mask=inputs.get('attention_mask'), 
+                                       labels=labels)
+                        total_val_loss += outputs.loss.item()
+                avg_val_loss = total_val_loss / len(val_dataloader)
+                logger.info(f"Epoch {epoch+1}/{epochs}, Training Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}")
+                if avg_val_loss < best_val_loss:
+                    best_val_loss = avg_val_loss
+                    logger.info(f"New best validation loss: {best_val_loss:.4f}, saving model")
+                    model_path = os.path.join(output_dir, f"model_epoch_{epoch+1}")
+                    model.save_pretrained(model_path)
+                    tokenizer.save_pretrained(model_path)
+        except KeyboardInterrupt:
+            logger.warning("Training interrupted by user (Ctrl+C). Saving current model...")
+            interrupted_model_path = os.path.join(output_dir, "model_interrupted")
+            model.save_pretrained(interrupted_model_path)
+            tokenizer.save_pretrained(interrupted_model_path)
+            logger.info(f"Model saved to {interrupted_model_path} after interruption.")
+            return model, tokenizer
         final_model_path = os.path.join(output_dir, "model_final")
         model.save_pretrained(final_model_path)
         tokenizer.save_pretrained(final_model_path)
-        
         logger.info(f"Training complete. Final model saved to {final_model_path}")
-        
         return model, tokenizer
-    
     except Exception as e:
         logger.error(f"Error during model training: {e}")
         logger.error("Failed to train the model.")

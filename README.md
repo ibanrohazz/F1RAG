@@ -15,7 +15,7 @@ The system uses Formula 1 World Championship data from 1950-2020, sourced from:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/F1RAG.git
+   git clone https://github.com/ibanrohazz/F1RAG.git
    cd F1RAG
    ```
 
