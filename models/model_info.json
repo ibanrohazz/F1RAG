@@ -1,0 +1,8 @@
+{
+  "model_type": "seq2seq",
+  "base_model": "facebook/bart-large",
+  "training_examples": 11041,
+  "epochs": 3,
+  "batch_size": 4,
+  "learning_rate": 2e-05
+}
